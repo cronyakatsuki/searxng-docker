@@ -1,25 +1,24 @@
 # searxng-docker
 
-Create a new SearXNG  instance in five minutes using Docker
+Create a new SearXNG  instance in five minutes using Docker ready to be used behind a proxy like nginx.
 
 ## What is included ?
 
 | Name | Description | Docker image | Dockerfile |
 | -- | -- | -- | -- |
-| [Caddy](https://github.com/caddyserver/caddy) | Reverse proxy (create a LetsEncrypt certificate automatically) | [caddy/caddy:2-alpine](https://hub.docker.com/_/caddy) | [Dockerfile](https://github.com/caddyserver/caddy-docker) |
 | [SearXNG](https://github.com/searxng/searxng) | SearXNG by itself | [searxng/searxng:latest](https://hub.docker.com/r/searxng/searxng) | [Dockerfile](https://github.com/searxng/searxng/blob/master/Dockerfile) |
 | [Redis](https://github.com/redis/redis) | In-memory database | [redis:alpine](https://hub.docker.com/_/redis) | [Dockerfile-alpine.template](https://github.com/docker-library/redis/blob/master/Dockerfile-alpine.template) |
 
 ## How to use it
 - [Install docker](https://docs.docker.com/install/)
 - [Install docker-compose](https://docs.docker.com/compose/install/) (be sure that docker-compose version is at least 1.9.0)
+- install nginx
 - Get searxng-docker
   ```sh
   cd /usr/local
-  git clone https://github.com/searxng/searxng-docker.git
+  git clone https://github.com/cronyakatsuki/searxng-docker.git
   cd searxng-docker
   ```
-- Edit the [.env](https://github.com/searxng/searxng-docker/blob/master/.env) file to set the hostname and an email
 - Generate the secret key ```sed -i "s|ultrasecretkey|$(openssl rand -hex 32)|g" searxng/settings.yml```
 - Edit the [searxng/settings.yml](https://github.com/searxng/searxng-docker/blob/master/searxng/settings.yml) file according to your need
 - Check everything is working: ```docker-compose up```
@@ -29,7 +28,6 @@ Create a new SearXNG  instance in five minutes using Docker
 To access the logs from all the containers use: `docker-compose logs -f`.
 
 To access the logs of one specific container:
-- Caddy: `docker-compose logs -f caddy`
 - SearXNG: `docker-compose logs -f searxng`
 - Redis: `docker-compose logs -f redis`
 
@@ -44,6 +42,49 @@ You can skip this step if you don't use systemd.
   systemctl enable $(pwd)/searxng-docker.service
   systemctl start searxng-docker.service
   ```
+## Basic nginx config
+You can skip this step if you wan't to just run it locally
+
+Create a new config for searxng and add paste this.
+```
+server {
+
+    listen 80;
+    listen [::]:80;
+
+    # Your server name
+    server_name searx.example.org ;
+
+    # If you want to log user activity, comment these
+    access_log /dev/null;
+    error_log  /dev/null;
+
+    # X-Frame-Options (XFO) header set to DENY
+    add_header X-Frame-Options "DENY";
+
+    # HTTP Strict Transport Security (HSTS) header
+    add_header Strict-Transport-Security "max-age=63072000; always";
+
+    # OCSP stapling
+    ssl_stapling on;
+    ssl_stapling_verify on;
+
+    # Content Security Policy (CSP)
+    add_header Content-Security-Policy "default-src 'self';";
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header Connection       $http_connection;
+        proxy_set_header X-Forwarded-For  $proxy_add_x_forwarded_for;
+        proxy_set_header X-Scheme         $scheme;
+        proxy_buffering                   off;
+    }
+}
+```
+
+Then you can use certbot or any other tool to create ssl certificates.
+Make sure to restart nginx.
 
 ## Note on the image proxy feature
 
